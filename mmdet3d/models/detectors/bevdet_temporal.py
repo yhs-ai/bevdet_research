@@ -12,9 +12,9 @@ from mmdet3d.core import bbox3d2result
 
 
 @DETECTORS.register_module()
-class BEVDet(CenterPoint):
+class BEVDetTemporal(CenterPoint):
     def __init__(self, img_view_transformer, img_bev_encoder_backbone, img_bev_encoder_neck, **kwargs):
-        super(BEVDet, self).__init__(**kwargs)
+        super(BEVDetTemporal, self).__init__(**kwargs)
         self.img_view_transformer = builder.build_neck(img_view_transformer)
         self.img_bev_encoder_backbone = builder.build_backbone(img_bev_encoder_backbone)
         self.img_bev_encoder_neck = builder.build_neck(img_bev_encoder_neck)
@@ -166,7 +166,9 @@ class BEVDet(CenterPoint):
 
     def simple_test(self, points, img_metas, img=None, rescale=False):
         """Test function without augmentaiton."""
-        img_feats, _ = self.extract_feat(points, img=img, img_metas=img_metas)
+        #chgd
+        img_feats, _ = self.extract_prev_feat(points, img=img, img_metas=img_metas)
+        #img_feats, _ = self.extract_feat(points, img=img, img_metas=img_metas)
         bbox_list = [dict() for _ in range(len(img_metas))]
         bbox_pts = self.simple_test_pts(img_feats, img_metas, rescale=rescale)
         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
@@ -188,10 +190,10 @@ class BEVDet(CenterPoint):
 
 
 @DETECTORS.register_module()
-class BEVDetSequential(BEVDet):
+class BEVDetSequentialTemporal(BEVDetTemporal):
     def __init__(self, aligned=False, distill=None, pre_process=None,
                  pre_process_neck=None, detach=True, test_adj_ids=None, **kwargs):
-        super(BEVDetSequential, self).__init__(**kwargs)
+        super(BEVDetSequentialTemporal, self).__init__(**kwargs)
         self.aligned = aligned
         self.distill = distill is not None
         if self.distill:
@@ -260,9 +262,9 @@ class BEVDetSequential(BEVDet):
 
 
 @DETECTORS.register_module()
-class BEVDetSequentialES(BEVDetSequential):
+class BEVDetSequentialESTemporal(BEVDetSequentialTemporal):
     def __init__(self, before=False, interpolation_mode='bilinear',**kwargs):
-        super(BEVDetSequentialES, self).__init__(**kwargs)
+        super(BEVDetSequentialESTemporal, self).__init__(**kwargs)
         self.before=before
         self.interpolation_mode=interpolation_mode
 
@@ -347,8 +349,6 @@ class BEVDetSequentialES(BEVDetSequential):
             bev_feat = self.img_view_transformer.voxel_pooling(geom, volume)
 
             bev_feat_list.append(bev_feat)
-
-        #pdb.set_trace()
         if self.before and self.pre_process:
             bev_feat_list = [self.pre_process_net(bev_feat)[0] for bev_feat in bev_feat_list]
         bev_feat_list[1] = self.shift_feature(bev_feat_list[1], trans, rots)

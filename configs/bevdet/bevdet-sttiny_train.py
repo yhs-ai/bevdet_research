@@ -1,4 +1,3 @@
-
 # Copyright (c) Phigent Robotics. All rights reserved.
 
 _base_ = ['../_base_/datasets/nus-3d.py',
@@ -16,7 +15,7 @@ class_names = [
 
 data_config={
     'cams': ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
-             'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
+            'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
     'Ncams': 6,
     'input_size': (256, 704),
     'src_size': (900, 1600),
@@ -44,26 +43,29 @@ model = dict(
     type='BEVDet',
     img_backbone=dict(
         type='SwinTransformer',
-        pretrained='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth',
         pretrain_img_size=224,
-        embed_dims=96,
-        patch_size=4,
-        window_size=7,
-        mlp_ratio=4,
-        depths=[2, 2, 6, 2],
-        num_heads=[3, 6, 12, 24],
-        strides=(4, 2, 2, 2),
-        out_indices=(2, 3,),
-        qkv_bias=True,
-        qk_scale=None,
-        patch_norm=True,
-        drop_rate=0.,
-        attn_drop_rate=0.,
-        drop_path_rate=0.0,
-        use_abs_pos_embed=False,
-        act_cfg=dict(type='GELU'),
-        norm_cfg=dict(type='LN', requires_grad=True),
-        pretrain_style='official',
+         in_channels=3,
+         embed_dims=96,
+         patch_size=4,
+         window_size=7,
+         mlp_ratio=4,
+         depths=(2, 2, 6, 2),
+         num_heads=(3, 6, 12, 24),
+         strides=(4, 2, 2, 2),
+         out_indices=(2, 3),
+         qkv_bias=True,
+         qk_scale=None,
+         patch_norm=True,
+         drop_rate=0.,
+         attn_drop_rate=0.,
+         drop_path_rate=0.0,
+         use_abs_pos_embed=False,
+         act_cfg=dict(type='GELU'),
+         norm_cfg=dict(type='LN'),
+         with_cp=False,
+         pretrained='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth',
+         frozen_stages=-1,
+         init_cfg=None,
         output_missing_index_as_none=False),
     img_neck=dict(
         type='FPN_LSS',
@@ -224,7 +226,7 @@ input_modality = dict(
     use_external=False)
 
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=4,
     workers_per_gpu=4,
     train=dict(
         type='CBGSDataset',
@@ -236,8 +238,8 @@ data = dict(
             classes=class_names,
             test_mode=False,
             use_valid_flag=True,
-            modality=input_modality,
             load_interval=7,
+            modality=input_modality,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
             # and box_type_3d='Depth' in sunrgbd and scannet dataset.
             box_type_3d='LiDAR',
@@ -255,11 +257,10 @@ lr_config = dict(
     step_ratio_up=0.4,
 )
 
-optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
-
 total_epochs = 12
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 evaluation = dict(interval=12, pipeline=eval_pipeline)
 checkpoint_config = dict(interval=1)
-work_dir = 'work_dirs/bevdet_sttiny/'
-#resume_from = 'work_dirs/bevdet_sttiny/epoch_3.pth'
+optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
+work_dir = 'work_dirs/bevdet_base/'
+resume_from = 'work_dirs/bevdet_base/epoch_3.pth'

@@ -6,8 +6,9 @@ class_names = [
     'car', 'truck', 'trailer', 'bus', 'construction_vehicle', 'bicycle',
     'motorcycle', 'pedestrian', 'traffic_cone', 'barrier'
 ]
-dataset_type = 'NuScenesDataset'
+dataset_type = 'NuScenesTemporalDataset'
 data_root = '/media/yhson/2c4a7dd4-f03e-462b-a004-60607e96489a/bdkim/data/nuscenes/'
+#data_root = 'data/nuscenes/'
 
 # Input modality for nuScenes dataset, this is consistent with the submission
 # format which requires the information in input_modality.

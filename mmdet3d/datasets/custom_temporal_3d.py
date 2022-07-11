@@ -12,9 +12,8 @@ from ..core.bbox import get_box_type
 from .pipelines import Compose
 from .utils import extract_result_dict, get_loading_pipeline
 
-
 @DATASETS.register_module()
-class Custom3DDataset(Dataset):
+class Custom3DDatasetTemporal(Dataset):
     """Customized 3D dataset.
 
     This is the base dataset of SUNRGB-D, ScanNet, nuScenes, and KITTI
@@ -70,6 +69,10 @@ class Custom3DDataset(Dataset):
         # set group flag for the sampler
         if not self.test_mode:
             self._set_group_flag()
+
+        # chgd
+        from nuscenes.nuscenes import NuScenes
+        self.nusc = NuScenes(version=self.version, dataroot=self.data_root, verbose=True)
 
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
@@ -150,6 +153,19 @@ class Custom3DDataset(Dataset):
             dict: Training data dict of the corresponding index.
         """
         input_dict = self.get_data_info(index)
+
+        '''
+        #chgd
+        idx_list = []
+        img_info = self.data_infos[index]
+        sample_token = img_info['token']
+        ## previous samples
+        for i in range(self.num_images-1):
+            scene_token = self.nusc.get('sample', sample_token)['scene_token']
+            prev_token = self.nusc.get('sample', sample_token)['prev']
+        #pdb.set_trace()
+        '''
+
         if input_dict is None:
             return None
         self.pre_pipeline(input_dict)

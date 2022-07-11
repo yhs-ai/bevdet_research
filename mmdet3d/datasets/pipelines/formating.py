@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
+import pdb
 from mmcv.parallel import DataContainer as DC
 
 from mmdet3d.core.bbox import BaseInstance3DBoxes
@@ -41,6 +42,7 @@ class DefaultFormatBundle(object):
             dict: The result dict contains the data that is formatted with
                 default bundle.
         """
+        #pdb.set_trace()
         if 'img' in results:
             if isinstance(results['img'], list):
                 # process multiple imgs in single frame
@@ -161,6 +163,7 @@ class Collect3D(object):
                 img_metas[key] = results[key]
 
         data['img_metas'] = DC(img_metas, cpu_only=True)
+        #pdb.set_trace()
         for key in self.keys:
             data[key] = results[key]
         return data

@@ -265,7 +265,7 @@ data = dict(
             prev_only=True,
             fix_direction=True)),
     val=dict(pipeline=test_pipeline, classes=class_names,
-            ann_file=data_root + 'nuscenes_infos_val_4d_interval3.pkl',
+            ann_file=data_root + 'nuscenes_infos_val_4d_interval3_max60.pkl',
         modality=input_modality, img_info_prototype='bevdet_sequential',),
     test=dict(pipeline=test_pipeline, classes=class_names,
             ann_file=data_root + 'nuscenes_infos_val_4d_interval3_max60.pkl',
@@ -284,3 +284,4 @@ lr_config = dict(
 
 optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
 evaluation = dict(interval=20, pipeline=eval_pipeline)
+work_dir = 'work_dirs/bevdet4d_debug/'

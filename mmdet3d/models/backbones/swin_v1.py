@@ -24,6 +24,7 @@ from ..utils import PatchEmbed, swin_convert
 
 class PatchMerging(BaseModule):
     """Merge patch feature map.
+
     This layer use nn.Unfold to group feature map by kernel_size, and use norm
     and linear layer to embed grouped feature map.
     Args:
@@ -94,6 +95,7 @@ class PatchMerging(BaseModule):
 class WindowMSA(BaseModule):
     """Window based multi-head self-attention (W-MSA) module with relative
     position bias.
+
     Args:
         embed_dims (int): Number of input channels.
         window_size (tuple[int]): The height and width of the window.
@@ -152,6 +154,7 @@ class WindowMSA(BaseModule):
     def forward(self, x, mask=None):
         """
         Args:
+
             x (tensor): input features with shape of (num_windows*B, N, C)
             mask (tensor | None, Optional): mask with shape of (num_windows,
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
@@ -200,6 +203,7 @@ class WindowMSA(BaseModule):
 @ATTENTION.register_module()
 class ShiftWindowMSA(BaseModule):
     """Shift Window Multihead Self-Attention Module.
+
     Args:
         embed_dims (int): Number of input channels.
         num_heads (int): Number of attention heads.
@@ -424,10 +428,8 @@ class SwinBlock(BaseModule):
             act_cfg=act_cfg,
             add_identity=True,
             init_cfg=None)
-        self.hw_shape = None
 
-    def forward(self, x):
-        hw_shape = self.hw_shape
+    def forward(self, x, hw_shape):
         identity = x
         x = self.norm1(x)
         x = self.attn(x, hw_shape)
@@ -443,6 +445,7 @@ class SwinBlock(BaseModule):
 
 class SwinBlockSequence(BaseModule):
     """Implements one stage in Swin Transformer.
+
     Args:
         embed_dims (int): The feature dimension.
         num_heads (int): Parallel attention heads.
@@ -509,15 +512,14 @@ class SwinBlockSequence(BaseModule):
 
         self.downsample = downsample
         self.with_cp = with_cp
-
+    
     def forward(self, x, hw_shape):
-        #pdb.set_trace()
+        pdb.set_trace()
         for block in self.blocks:
-            block.hw_shape=hw_shape
             if self.with_cp:
-                x = checkpoint.checkpoint(block, x)
+                x = checkpoint.checkpoint(block, x, hw_shape)
             else:
-                x = block(x)
+                x = block(x, hw_shape)
 
         if self.downsample:
             x_down, down_hw_shape = self.downsample(x, hw_shape)
@@ -532,8 +534,10 @@ class SwinTransformer(BaseModule):
     A PyTorch implement of : `Swin Transformer:
     Hierarchical Vision Transformer using Shifted Windows`  -
         https://arxiv.org/abs/2103.14030
+
     Inspiration from
     https://github.com/microsoft/Swin-Transformer
+
     Args:
         pretrain_img_size (int | tuple[int]): The size of input image when
             pretrain. Defaults: 224.

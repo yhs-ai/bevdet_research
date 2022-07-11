@@ -1,20 +1,20 @@
-# Copyright (c) Phigent Robotics. All rights reserved.
-
-import os
-import torch
-import torch.nn.functional as F
+# Copyright (c) OpenMMLab. All rights reserved.
 import pdb
-from mmdet.models import DETECTORS
+from mmdet.models.builder import DETECTORS
 from .centerpoint import CenterPoint
 from .single_stage_mono3d import SingleStageMono3DDetector
 from .. import builder
-from mmdet3d.core import bbox3d2result
-
 
 @DETECTORS.register_module()
-class BEVDet(CenterPoint):
+class FCOSMono3DBEV(SingleStageMono3DDetector):
+    r"""`FCOS3D <https://arxiv.org/abs/2104.10956>`_ for monocular 3D object detection.
+
+    Currently please refer to our entry on the
+    `leaderboard <https://www.nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Camera>`_.
+    """  # noqa: E501
+
     def __init__(self, img_view_transformer, img_bev_encoder_backbone, img_bev_encoder_neck, **kwargs):
-        super(BEVDet, self).__init__(**kwargs)
+        super(FCOSMono3DBEV, self).__init__(**kwargs)
         self.img_view_transformer = builder.build_neck(img_view_transformer)
         self.img_bev_encoder_backbone = builder.build_backbone(img_bev_encoder_backbone)
         self.img_bev_encoder_neck = builder.build_neck(img_bev_encoder_neck)
@@ -42,28 +42,9 @@ class BEVDet(CenterPoint):
         x = self.bev_encoder(x)
         return [x]
 
-    
-    def extract_prev_img_feat(self, img, img_metas):
-        """Extract features of images."""
-        #pdb.set_trace()
-        x = self.image_encoder(img[0])
-        #chgd
-        x2 = self.image_encoder(img[6])
-        img[6] = x2
-        x = self.img_view_transformer([x] + img[1:])
-        x = self.bev_encoder(x)
-        return [x]
-    
-
     def extract_feat(self, points, img, img_metas):
         """Extract features from images and points."""
         img_feats = self.extract_img_feat(img, img_metas)
-        pts_feats = None
-        return (img_feats, pts_feats)
-
-    def extract_prev_feat(self, points, img, img_metas):
-        """Extract features from images and points."""
-        img_feats = self.extract_prev_img_feat(img, img_metas)
         pts_feats = None
         return (img_feats, pts_feats)
 
@@ -102,25 +83,17 @@ class BEVDet(CenterPoint):
         Returns:
             dict: Losses of different branches.
         """
-        #chgd
-        if len(img_inputs) == 12:
-            img_feats, pts_feats = self.extract_prev_feat(
-                points, img=img_inputs, img_metas=img_metas)
-            assert self.with_pts_bbox
-            losses = dict()
-
-        else:
-            img_feats, pts_feats = self.extract_feat(
-                points, img=img_inputs, img_metas=img_metas)
-            assert self.with_pts_bbox
-            losses = dict()
-        
+        pdb.set_trace()
+        img_feats, pts_feats = self.extract_feat(
+            points, img=img_inputs, img_metas=img_metas)
+        assert self.with_pts_bbox
+        losses = dict()
+    
         losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
                                             gt_labels_3d, img_metas,
                                             gt_bboxes_ignore)
         losses.update(losses_pts)
         return losses
-
 
     def forward_test(self, points=None, img_metas=None, img_inputs=None, **kwargs):
         """
@@ -188,10 +161,10 @@ class BEVDet(CenterPoint):
 
 
 @DETECTORS.register_module()
-class BEVDetSequential(BEVDet):
+class FCOSBEVSequential(FCOSMono3DBEV):
     def __init__(self, aligned=False, distill=None, pre_process=None,
                  pre_process_neck=None, detach=True, test_adj_ids=None, **kwargs):
-        super(BEVDetSequential, self).__init__(**kwargs)
+        super(FCOSBEVSequential, self).__init__(**kwargs)
         self.aligned = aligned
         self.distill = distill is not None
         if self.distill:
@@ -260,9 +233,9 @@ class BEVDetSequential(BEVDet):
 
 
 @DETECTORS.register_module()
-class BEVDetSequentialES(BEVDetSequential):
+class FCOSBEVSequentialES(FCOSBEVSequential):
     def __init__(self, before=False, interpolation_mode='bilinear',**kwargs):
-        super(BEVDetSequentialES, self).__init__(**kwargs)
+        super(FCOSBEVSequentialES, self).__init__(**kwargs)
         self.before=before
         self.interpolation_mode=interpolation_mode
 
@@ -347,8 +320,6 @@ class BEVDetSequentialES(BEVDetSequential):
             bev_feat = self.img_view_transformer.voxel_pooling(geom, volume)
 
             bev_feat_list.append(bev_feat)
-
-        #pdb.set_trace()
         if self.before and self.pre_process:
             bev_feat_list = [self.pre_process_net(bev_feat)[0] for bev_feat in bev_feat_list]
         bev_feat_list[1] = self.shift_feature(bev_feat_list[1], trans, rots)

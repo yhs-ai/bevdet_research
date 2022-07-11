@@ -1,7 +1,6 @@
-
 # Copyright (c) Phigent Robotics. All rights reserved.
 
-_base_ = ['../_base_/datasets/nus-3d.py',
+_base_ = ['../_base_/datasets/nus-3d-temporal_v2.py',
           '../_base_/schedules/cyclic_20e.py',
           '../_base_/default_runtime.py']
 # Global
@@ -16,7 +15,7 @@ class_names = [
 
 data_config={
     'cams': ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
-             'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
+            'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
     'Ncams': 6,
     'input_size': (256, 704),
     'src_size': (900, 1600),
@@ -41,7 +40,7 @@ voxel_size = [0.1, 0.1, 0.2]
 numC_Trans=64
 
 model = dict(
-    type='BEVDet',
+    type='BEVDetTemporal',
     img_backbone=dict(
         type='SwinTransformer',
         pretrained='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth',
@@ -72,7 +71,7 @@ model = dict(
         extra_upsample=None,
         input_feature_index=(0,1),
         scale_factor=2),
-    img_view_transformer=dict(type='ViewTransformerLiftSplatShoot',
+    img_view_transformer=dict(type='ViewTransformerLiftSplatShootTemporalAlign',
                               grid_config=grid_config,
                               data_config=data_config,
                               numC_Trans=numC_Trans),
@@ -80,6 +79,7 @@ model = dict(
     img_bev_encoder_neck = dict(type='FPN_LSS',
                                 in_channels=numC_Trans*8+numC_Trans*2,
                                 out_channels=256),
+
     pts_bbox_head=dict(
         type='CenterHead',
         in_channels=256,
@@ -108,6 +108,7 @@ model = dict(
         loss_cls=dict(type='GaussianFocalLoss', reduction='mean'),
         loss_bbox=dict(type='L1Loss', reduction='mean', loss_weight=0.25),
         norm_bbox=True),
+
     # model training and testing settings
     train_cfg=dict(
         pts=dict(
@@ -143,13 +144,14 @@ model = dict(
 
 
 # Data
-dataset_type = 'NuScenesDataset'
+dataset_type = 'NuScenesTemporalDatasetV2'
 data_root = '/media/yhson/2c4a7dd4-f03e-462b-a004-60607e96489a/bdkim/data/nuscenes/'
+#data_root = 'data/nuscenes/'
 file_client_args = dict(backend='disk')
 
 
 train_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_BEVDet', is_train=True, data_config=data_config),
+    dict(type='LoadMultiViewImageFromFiles_BEVDetTemporal_V2', is_train=True, data_config=data_config),
     dict(
         type='LoadPointsFromFile',
         dummy=True,
@@ -184,7 +186,7 @@ train_pipeline = [
 ]
 
 test_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_BEVDet', data_config=data_config),
+    dict(type='LoadMultiViewImageFromFiles_BEVDetTemporal_V2', data_config=data_config),
     # load lidar points for --show in test.py only
     dict(
         type='LoadPointsFromFile',
@@ -208,7 +210,7 @@ test_pipeline = [
 # construct a pipeline for data and gt loading in show function
 # please keep its loading function consistent with test_pipeline (e.g. client)
 eval_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_BEVDet', data_config=data_config),
+    dict(type='LoadMultiViewImageFromFiles_BEVDetTemporal_V2', data_config=data_config),
     dict(
         type='DefaultFormatBundle3D',
         class_names=class_names,
@@ -225,7 +227,7 @@ input_modality = dict(
 
 data = dict(
     samples_per_gpu=8,
-    workers_per_gpu=4,
+    workers_per_gpu=0,
     train=dict(
         type='CBGSDataset',
         dataset=dict(
@@ -236,8 +238,8 @@ data = dict(
             classes=class_names,
             test_mode=False,
             use_valid_flag=True,
-            modality=input_modality,
             load_interval=7,
+            modality=input_modality,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
             # and box_type_3d='Depth' in sunrgbd and scannet dataset.
             box_type_3d='LiDAR',
@@ -255,11 +257,10 @@ lr_config = dict(
     step_ratio_up=0.4,
 )
 
-optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
-
 total_epochs = 12
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 evaluation = dict(interval=12, pipeline=eval_pipeline)
 checkpoint_config = dict(interval=1)
-work_dir = 'work_dirs/bevdet_sttiny/'
-#resume_from = 'work_dirs/bevdet_sttiny/epoch_3.pth'
+optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
+work_dir = 'work_dirs/bevdet_gru_with_cp_align/'
+#resume_from = 'work_dirs/fcos_bev_gru_with_cp/latest.pth'

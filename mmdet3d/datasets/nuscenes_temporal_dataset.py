@@ -12,11 +12,12 @@ from mmdet.datasets import DATASETS
 from ..core import show_result
 from ..core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
 from .custom_3d import Custom3DDataset
+from .custom_temporal_3d import Custom3DDatasetTemporal
 from .pipelines import Compose
 
 
 @DATASETS.register_module()
-class NuScenesDataset(Custom3DDataset):
+class NuScenesTemporalDataset(Custom3DDatasetTemporal):
     r"""NuScenes Dataset.
 
     This class serves as the API for experiments on the NuScenes Dataset.
@@ -171,6 +172,10 @@ class NuScenesDataset(Custom3DDataset):
         self.fix_direction = fix_direction
         self.test_adj_ids = test_adj_ids
 
+        # chgd
+        from nuscenes.nuscenes import NuScenes
+        self.nusc = NuScenes(version=self.version, dataroot=self.data_root, verbose=True)
+
     def get_cat_ids(self, idx):
         """Get category distribution of single scene.
 
@@ -233,6 +238,36 @@ class NuScenesDataset(Custom3DDataset):
         """
         #pdb.set_trace()
         info = self.data_infos[index] # len = 28130
+
+        #chgd
+        cams= ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
+            'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
+
+        idx_list = []
+        prev_rotation_list = []
+        prev_translation_list = []
+        prev_intrins = []
+        sample_token = info['token']
+        prev_e2g_rots_list = []
+        prev_e2g_trans_list = []
+
+        # previous samples
+        subtract = 1
+        for i in range(2):
+            #scene_token = self.nusc.get('sample', sample_token)['scene_token']
+            #prev_token = self.nusc.get('sample', sample_token)['prev']
+            info2 = self.data_infos[index - subtract]
+            #pdb.set_trace()
+
+            for cam in cams:
+                idx_list.append(info2['cams'][cam]['data_path'])
+                prev_rotation_list.append(torch.Tensor(info2['cams'][cam]['sensor2lidar_rotation']))
+                prev_translation_list.append(torch.Tensor(info2['cams'][cam]['sensor2lidar_translation']))
+                prev_intrins.append(torch.Tensor(info2['cams'][cam]['cam_intrinsic']))
+
+            subtract+=1
+        
+        #pdb.set_trace()
         
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
@@ -240,8 +275,13 @@ class NuScenesDataset(Custom3DDataset):
             pts_filename=info['lidar_path'],
             sweeps=info['sweeps'],
             timestamp=info['timestamp'] / 1e6,
+            prev_img_idx=idx_list,
+            prev_rots = prev_rotation_list,
+            prev_trans = prev_translation_list,
+            prev_intrins = prev_intrins,
         )
 
+        #pdb.set_trace()
         if self.modality['use_camera']:
             if self.img_info_prototype == 'mmcv': # chgd -> == to !=
                 image_paths = []
@@ -269,6 +309,7 @@ class NuScenesDataset(Custom3DDataset):
                     ))
             elif self.img_info_prototype == 'bevdet':
                 input_dict.update(dict(img_info=info['cams'])) # len == 6
+   
             elif self.img_info_prototype == 'bevdet_sequential':
                 if info ['prev'] is None or info['next'] is None:
                     adjacent= 'prev' if info['next'] is None else 'next'
@@ -414,14 +455,14 @@ class NuScenesDataset(Custom3DDataset):
                     elif name in ['bicycle', 'motorcycle']:
                         attr = 'cycle.with_rider'
                     else:
-                        attr = NuScenesDataset.DefaultAttribute[name]
+                        attr = NuScenesTemporalDataset.DefaultAttribute[name]
                 else:
                     if name in ['pedestrian']:
                         attr = 'pedestrian.standing'
                     elif name in ['bus']:
                         attr = 'vehicle.stopped'
                     else:
-                        attr = NuScenesDataset.DefaultAttribute[name]
+                        attr = NuScenesTemporalDataset.DefaultAttribute[name]
 
                 nusc_anno = dict(
                     sample_token=sample_token,

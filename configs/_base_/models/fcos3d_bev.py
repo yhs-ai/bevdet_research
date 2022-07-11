@@ -1,7 +1,32 @@
+data_config={
+    'cams': ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
+             'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
+    'Ncams': 6,
+    'input_size': (256, 704),
+    'src_size': (900, 1600),
+
+    # Augmentation
+    'resize': (-0.06, 0.11),
+    'rot': (-5.4, 5.4),
+    'flip': True,
+    'crop_h': (0.0, 0.0),
+    'resize_test':0.04,
+}
+
+grid_config={
+        'xbound': [-51.2, 51.2, 0.8],
+        'ybound': [-51.2, 51.2, 0.8],
+        'zbound': [-10.0, 10.0, 20.0],
+        'dbound': [1.0, 60.0, 1.0],}
+
+voxel_size = [0.1, 0.1, 0.2]
+
+numC_Trans=64
+
 model = dict(
-    type='FCOSMono3D',
+    type='BEVDet',
     #pretrained='open-mmlab://detectron2/resnet101_caffe',
-    backbone=dict(
+    img_backbone=dict(
         type='ResNet',
         depth=101,
         num_stages=4,
@@ -10,7 +35,7 @@ model = dict(
         norm_cfg=dict(type='BN', requires_grad=False),
         norm_eval=True,
         style='caffe'),
-    neck=dict(
+    img_neck=dict(
         type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
@@ -18,6 +43,14 @@ model = dict(
         add_extra_convs='on_output',
         num_outs=5,
         relu_before_extra_convs=True),
+    img_view_transformer=dict(type='ViewTransformerLiftSplatShoot',
+                                  grid_config=grid_config,
+                                  data_config=data_config,
+                                  numC_Trans=numC_Trans),
+    img_bev_encoder_backbone = dict(type='ResNetForBEVDet', numC_input=numC_Trans),
+    img_bev_encoder_neck = dict(type='FPN_LSS',
+                                in_channels=numC_Trans*8+numC_Trans*2,
+                                out_channels=256),
     bbox_head=dict(
         type='FCOSMono3DHead',
         num_classes=10,

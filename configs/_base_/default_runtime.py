@@ -1,4 +1,4 @@
-checkpoint_config = dict(interval=1)
+checkpoint_config = dict(interval=2)
 # yapf:disable push
 # By default we use textlogger hook and tensorboard
 # For more loggers see

@@ -2,11 +2,14 @@
 from mmdet.datasets.builder import build_dataloader
 from .builder import DATASETS, build_dataset
 from .custom_3d import Custom3DDataset
+from .custom_temporal_3d import Custom3DDatasetTemporal
 from .custom_3d_seg import Custom3DSegDataset
 from .kitti_dataset import KittiDataset
 from .kitti_mono_dataset import KittiMonoDataset
 from .lyft_dataset import LyftDataset
 from .nuscenes_dataset import NuScenesDataset
+from .nuscenes_temporal_dataset import NuScenesTemporalDataset
+from .nuscenes_temporal_dataset_v2 import NuScenesTemporalDatasetV2
 from .nuscenes_mono_dataset import NuScenesMonoDataset
 # yapf: disable
 from .pipelines import (BackgroundPointsFilter, GlobalAlignment,
@@ -38,5 +41,6 @@ __all__ = [
     'Custom3DDataset', 'Custom3DSegDataset', 'LoadPointsFromMultiSweeps',
     'WaymoDataset', 'BackgroundPointsFilter', 'VoxelBasedPointSampler',
     'get_loading_pipeline', 'RandomDropPointsColor', 'RandomJitterPoints',
-    'ObjectNameFilter'
+    'ObjectNameFilter', 'NuScenesTemporalDataset', 'Custom3DDatasetTemporal',
+    'NuScenesTemporalDatasetV2'
 ]

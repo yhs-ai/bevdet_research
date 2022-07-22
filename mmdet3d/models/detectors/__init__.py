@@ -17,11 +17,12 @@ from .votenet import VoteNet
 from .voxelnet import VoxelNet
 from .bevdet import BEVDet, BEVDetSequential
 from .bevdet_temporal import BEVDetTemporal
+from .bevdet_temporal_detr import BEVDetTemporalDETR
 
 __all__ = [
     'Base3DDetector', 'VoxelNet', 'DynamicVoxelNet', 'MVXTwoStageDetector',
     'DynamicMVXFasterRCNN', 'MVXFasterRCNN', 'PartA2', 'VoteNet', 'H3DNet',
     'CenterPoint', 'SSD3DNet', 'ImVoteNet', 'SingleStageMono3DDetector',
     'FCOSMono3D', 'ImVoxelNet', 'GroupFree3DNet', 'BEVDet',
-    'BEVDetSequential', 'FCOSMono3DBEV', 'BEVDetTemporal'
+    'BEVDetSequential', 'FCOSMono3DBEV', 'BEVDetTemporal', 'BEVDetTemporalDETR'
 ]

@@ -262,5 +262,5 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 evaluation = dict(interval=12, pipeline=eval_pipeline)
 checkpoint_config = dict(interval=1)
 optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
-work_dir = 'work_dirs/fcos_bev_gru_with_cp/'
-resume_from = 'work_dirs/fcos_bev_gru_with_cp/latest.pth'
+work_dir = 'work_dirs/bevdet_conv_gru_with_cp_v2/'
+#resume_from = 'work_dirs/bevdet_gru_with_cp_softmax/latest.pth'

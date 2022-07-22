@@ -623,7 +623,7 @@ class LoadMultiViewImageFromFiles_BEVDetTemporal(object):
         results['img_inputs'] = self.get_inputs(results)
         return results
 
-
+# chgd for feature alignment
 @PIPELINES.register_module()
 class LoadMultiViewImageFromFiles_BEVDetTemporal_V2(object):
     """Load multi channel images from a list of separate channel files.
@@ -830,11 +830,11 @@ class LoadMultiViewImageFromFiles_BEVDetTemporal_V2(object):
         # Feature Alignment
         idx = 0
         for pre_tran, pre_rot in zip(prev_trans, prev_rots):
-            if idx<=5:
+            if idx<=5: # t-1
                 egoadj2global = np.eye(4, dtype=np.float32)
                 egoadj2global[:3,:3] = Quaternion(results['prev_e2g_rots'][0]).rotation_matrix
                 egoadj2global[:3,3] = results['prev_e2g_trans'][0]
-            else:
+            else: # t-2
                 egoadj2global = np.eye(4, dtype=np.float32)
                 egoadj2global[:3,:3] = Quaternion(results['prev_e2g_rots'][1]).rotation_matrix
                 egoadj2global[:3,3] = results['prev_e2g_trans'][1]

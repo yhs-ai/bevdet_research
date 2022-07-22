@@ -40,7 +40,7 @@ voxel_size = [0.1, 0.1, 0.2]
 numC_Trans=64
 
 model = dict(
-    type='BEVDetTemporal',
+    type='BEVDetTemporalDETR',
     img_backbone=dict(
         type='SwinTransformer',
         pretrained='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth',
@@ -71,13 +71,34 @@ model = dict(
         extra_upsample=None,
         input_feature_index=(0,1),
         scale_factor=2),
-    img_view_transformer=dict(type='ViewTransformerLiftSplatShootTemporal',
+    img_view_transformer=dict(type='ViewTransformerLiftSplatShootTemporalDETR',
                               grid_config=grid_config,
                               data_config=data_config,
                               numC_Trans=numC_Trans),
-    img_bev_encoder_backbone = dict(type='ResNetForBEVDet', numC_input=numC_Trans),
+    #img_bev_encoder_backbone = dict(type='ResNetForBEVDet', numC_input=numC_Trans),
+    img_bev_encoder_backbone = dict(
+        type='DeformablePrevFreezeTemporalv2',
+        embed_dims=64,
+        num_feature_levels=3,
+        decoder=dict(
+            type='DeformableDetrTransformerDecoderv2',
+            num_layers=6,
+            #return_intermediate=True,
+            transformerlayers=dict(
+                type='DetrTransformerDecoderLayerv2',
+                attn_cfgs=[
+                    dict(
+                        type='MultiScaleDeformableAttention',
+                        num_levels=3,
+                        embed_dims=256)
+                ],
+                feedforward_channels=1024,
+                ffn_dropout=0.1,
+                operation_order=('cross_attn','norm',
+                                    'ffn', 'norm')))),
+    
     img_bev_encoder_neck = dict(type='FPN_LSS',
-                                in_channels=numC_Trans*8+numC_Trans*2,
+                                in_channels=256,
                                 out_channels=256),
 
     pts_bbox_head=dict(
@@ -262,5 +283,5 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 evaluation = dict(interval=12, pipeline=eval_pipeline)
 checkpoint_config = dict(interval=1)
 optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
-work_dir = 'work_dirs/fcos_bev_gru_with_cp/'
-resume_from = 'work_dirs/fcos_bev_gru_with_cp/latest.pth'
+work_dir = 'work_dirs/fcos_bev_gru_with_cp_detr_debug/'
+#resume_from = 'work_dirs/fcos_bev_gru_with_cp/latest.pth'

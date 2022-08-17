@@ -5,6 +5,7 @@ from PIL import Image
 import mmcv
 import numpy as np
 import pdb
+import cv2
 from pyquaternion import Quaternion
 
 from mmdet3d.core.points import BasePoints, get_points_type
@@ -213,6 +214,7 @@ class LoadMultiViewImageFromFiles_BEVDet(object):
 
             imgs.append(self.normalize_img(img))
 
+
             if self.sequential:
                 assert 'adjacent' in results
                 if not type(results['adjacent']) is list:
@@ -374,8 +376,9 @@ class LoadMultiViewImageFromFiles_BEVDetTemporal(object):
 
     def img_transform_core(self, img, resize_dims, crop, flip, rotate):
         # adjust image
-        img = img.resize(resize_dims)
-        img = img.crop(crop)
+        #pdb.set_trace() # (900, 1600)
+        img = img.resize(resize_dims) # (848, 477) -> (477, 848, 3)
+        img = img.crop(crop) # (99, 221, 803, 477) -> (256, 704,3)
         if flip:
             img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
         img = img.rotate(rotate)
@@ -440,7 +443,14 @@ class LoadMultiViewImageFromFiles_BEVDetTemporal(object):
             '''
 
             filename = cam_data['data_path']
+            #print("filename: ", filename)
             img = Image.open(filename)
+            '''
+            if cam=="CAM_FRONT":
+                img.save("loaded_sample_img.jpg")
+                pdb.set_trace()
+            '''
+
             post_rot = torch.eye(2)
             post_tran = torch.zeros(2)
 
@@ -468,6 +478,7 @@ class LoadMultiViewImageFromFiles_BEVDetTemporal(object):
             post_rot[:2, :2] = post_rot2
 
             imgs.append(self.normalize_img(img))
+            #pdb.set_trace()
 
             if self.sequential:
                 assert 'adjacent' in results

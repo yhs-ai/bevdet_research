@@ -277,7 +277,8 @@ class ViewTransformerLiftSplatShootTemporal(BaseModule):
 
         
         # ConvGRU Version2
-        input_tensor = torch.zeros(8, 2, 64, 128, 128)
+        #input_tensor = torch.zeros(8, 2, 64, 128, 128) # FOR TRAINING
+        input_tensor = torch.zeros(1, 2, 64, 128, 128) # For TESTING
         self.convgruv2 = ConvGRUV2(input_size=(height, width),
                     input_shape = input_tensor.shape,
                     input_dim=channels,
@@ -386,6 +387,8 @@ class ViewTransformerLiftSplatShootTemporal(BaseModule):
         x, rots, trans, intrins, post_rots, post_trans, prev_x, prev_rots, prev_trans, prev_intrins, prev_post_rots, prev_post_trans = input
         B, N, C, H, W = x.shape # N = 6
         #pdb.set_trace()
+        #x = x[:,:1] #erase!
+        #N=1 # erase!
         x = x.view(B * N, C, H, W)
         x = self.depthnet(x)
         depth = self.get_depth_dist(x[:, :self.D])
@@ -398,7 +401,9 @@ class ViewTransformerLiftSplatShootTemporal(BaseModule):
         volume = volume.permute(0, 1, 3, 4, 5, 2)
 
         # Splat
+        #geom = geom[:,:1] # erase!
         cur_bev = self.voxel_pooling(geom, volume) # (batch, 64, 128, 128)
+        #pdb.set_trace()
         
         # chgd (handle previous frames)
         iters = int(prev_x.shape[1]/6)
@@ -435,10 +440,19 @@ class ViewTransformerLiftSplatShootTemporal(BaseModule):
 
             prev_bevs[:][i] = bev_feat
 
+        '''
+        # BEV feature Visualization
+        pdb.set_trace()
+        import cv2
+        tmp_bev = prev_bevs[0][:,:4]*30
+        cv2.imwrite("bev.jpg", tmp_bev.cpu().detach().numpy().reshape(128,128,-1))
+        '''
+
         #pdb.set_trace()
-        # Feed current and prev bev features into GRU
+        # Feed prev bev features into GRU
         #prev_bevs = prev_bevs.permute(1, 2, 0, 3, 4)
         #prev_bevs = prev_bevs.reshape(B, 64, -1)
+        #pdb.set_trace()
         prev_bevs = prev_bevs.permute(1, 0, 2, 3, 4)
         res, _ = self.convgruv2(prev_bevs.cuda())
         res = self.dropout(res[0])
@@ -746,6 +760,32 @@ class ViewTransformerLiftSplatShootTemporalAlign(BaseModule):
         self.before=True
         self.interpolation_mode='bilinear'
 
+        # ConvGRU
+        height = width = 128
+        channels = 64
+        hidden_dim = [64, 64]
+        dtype = 'torch.cuda.FloatTensor'
+        kernel_size = (3,3) # kernel size for two stacked hidden layer
+        num_layers = 2 # number of stacked hidden layer
+
+        self.hidden_dim_ = 64
+        self.embed_dim = 32768
+        self.out = nn.Linear(self.hidden_dim_, self.embed_dim)
+        self.dropout = nn.Dropout(0.2)
+
+        #input_tensor = torch.zeros(8, 2, 64, 128, 128) # FOR TRAINING
+        input_tensor = torch.zeros(1, 2, 64, 128, 128) # For TESTING
+        self.convgruv2 = ConvGRUV2(input_size=(height, width),
+                    input_shape = input_tensor.shape,
+                    input_dim=channels,
+                    hidden_dim=hidden_dim,
+                    kernel_size=kernel_size,
+                    num_layers=num_layers,
+                    dtype=dtype,
+                    batch_first=True,
+                    bias = True,
+                    return_all_layers = False)
+
     def get_depth_dist(self, x):
         return x.softmax(dim=1)
 
@@ -881,7 +921,7 @@ class ViewTransformerLiftSplatShootTemporalAlign(BaseModule):
         return output
 
     def forward(self, input):
-        torch.autograd.set_detect_anomaly(True)
+        #torch.autograd.set_detect_anomaly(True)
         x, rots, trans, intrins, post_rots, post_trans, prev_x, prev_rots, prev_trans, prev_intrins, prev_post_rots, prev_post_trans = input
         B, N, C, H, W = x.shape # N = 6
         #pdb.set_trace()
@@ -906,7 +946,7 @@ class ViewTransformerLiftSplatShootTemporalAlign(BaseModule):
         prev_bevs = torch.zeros([2, B, 64, 128,128])
 
         #pdb.set_trace()
-        for i in range(iters):
+        for i in range(iters): #2
             if i == 0:
                 x = prev_img1
                 rots, trans, intrins, post_rots, post_trans = \
@@ -960,7 +1000,14 @@ class ViewTransformerLiftSplatShootTemporalAlign(BaseModule):
 
         #pdb.set_trace()
 
-        # Feed current and prev bev features into GRU
+        ###### Version 2: Conv gru ver2
+        prev_bevs = prev_bevs.permute(1, 0, 2, 3, 4)
+        res, _ = self.convgruv2(prev_bevs.cuda())
+        res = self.dropout(res[0])
+
+        '''
+        ####### Version 1: vanilla gru
+        # Feed prev bev features into GRU
         # prev_bevs.shape: [2,8,64,128,128]
         prev_bevs = prev_bevs.permute(1, 2, 0, 3, 4)
         prev_bevs = prev_bevs.reshape(B, 64, -1)
@@ -980,8 +1027,10 @@ class ViewTransformerLiftSplatShootTemporalAlign(BaseModule):
         else:
             cur_bev = torch.unsqueeze(cur_bev, 1)
             res = res.permute(1,0,2,3,4)
+        '''
 
         #pdb.set_trace()
+        cur_bev = cur_bev.unsqueeze(1)
         tmp_concat = torch.cat([cur_bev.cuda(), res], axis=1)
         bev_feat = torch.max(tmp_concat, dim=1)
         bev_feat = bev_feat[0].cuda()
@@ -1043,7 +1092,7 @@ class ViewTransformerLiftSplatShootTemporal_DFE(BaseModule):
             nn.ReLU(),
             nn.Conv2d(int(self.output_channel_num/2), 96, 1),
         )
-        self.depth_down = nn.Conv2d(96, 12, 3, stride=1, padding=1, groups=12)
+        self.depth_down = nn.Conv2d(96, 59, 3, stride=1, padding=1,) #groups=12)
         self.acf = dfe_module(512, 512)
 
 
@@ -1143,38 +1192,32 @@ class ViewTransformerLiftSplatShootTemporal_DFE(BaseModule):
         x, rots, trans, intrins, post_rots, post_trans, prev_x, prev_rots, prev_trans, prev_intrins, prev_post_rots, prev_post_trans = input
         B, N, C, H, W = x.shape # N = 6
 
-        # depth enhencement
-        tmp_x = torch.zeros([N, C, H, W])
-        tmp_final_x = torch.zeros([B, N, C, H, W])
-        for idx1, batch in enumerate(x):
-            for idx2, img in enumerate(batch):
-                img = torch.unsqueeze(img, 0)
-                depth = self.depth_output(img)
-                #N_, C_, H_, W_ = img.shape
-                depth_guide = F.interpolate(depth, size=img.size()[2:], mode='bilinear', align_corners=False)
-                depth_guide = self.depth_down(depth_guide)
-                img = img + self.acf(img, depth_guide) # [1, 512, 16, 44]
-                tmp_x[idx2] = img[0]
-
-            tmp_final_x[idx1] = tmp_x
-
-        x = tmp_final_x
-
-        # original code
+        # depth enhencement of t
         x = x.view(B * N, C, H, W).cuda()
-        x = self.depthnet(x)
-        depth = self.get_depth_dist(x[:, :self.D])
-        geom = self.get_geometry(rots, trans, intrins, post_rots, post_trans)
-        img_feat = x[:, self.D:(self.D + self.numC_Trans)]
+        img = x
+        depth = self.depth_output(img) # [48, 96, 32, 88]
+        depth_guide = F.interpolate(depth, size=img.size()[2:], mode='bilinear', align_corners=False)
+        depth_guide = self.depth_down(depth_guide) # [48, 59, 16, 44]
+        img_enhence = img + self.acf(img, depth_guide) # [48, 512, 16, 44]
+        
+        # original code
+        #x = x.view(B * N, C, H, W).cuda()
+        x = self.depthnet(img_enhence) # [48(B*N), 123, 16, 44]
+        depth = self.get_depth_dist(depth_guide) # [48, 59, 16, 44]
+        geom = self.get_geometry(rots, trans, intrins, post_rots, post_trans) # [8, 6, 59, 16, 44, 3]
+        img_feat = img_enhence[:, self.D:(self.D + self.numC_Trans)] # [48, 64, 16, 44]
 
+        #pdb.set_trace()
         # Lift
-        volume = depth.unsqueeze(1) * img_feat.unsqueeze(2)
+        volume = depth.unsqueeze(1) * img_feat.unsqueeze(2) # [48, 64, 59, 16, 44]
         volume = volume.view(B, N, self.numC_Trans, self.D, H, W)
         volume = volume.permute(0, 1, 3, 4, 5, 2)
 
         # Splat
         cur_bev = self.voxel_pooling(geom, volume) # (batch, 64, 128, 128)
-       
+        
+        #pdb.set_trace()
+
         # chgd (handle previous frames)
         iters = int(prev_x.shape[1]/6)
         prev_img1 = prev_x[:,:6] # t-1
@@ -1192,16 +1235,24 @@ class ViewTransformerLiftSplatShootTemporal_DFE(BaseModule):
                 rots, trans, intrins, post_rots, post_trans = \
                             prev_rots[:,6:], prev_trans[:,6:], prev_intrins[:,6:], prev_post_rots[:,6:], prev_post_trans[:,6:]
 
-            #pdb.set_trace()
-            B, N, C, H, W = x.shape
-            x = x.reshape(B * N, C, H, W)
-            x = self.depthnet(x)
-            depth = self.get_depth_dist(x[:, :self.D])
-            geom = self.get_geometry(rots, trans, intrins, post_rots, post_trans)
-            img_feat = x[:, self.D:(self.D + self.numC_Trans)]
+            # depth enhencement of t-1, t-2
+            x = x.reshape(B * N, C, H, W).cuda()
+            img = x
+            depth = self.depth_output(img) # [48, 96, 32, 88]
+            depth_guide = F.interpolate(depth, size=img.size()[2:], mode='bilinear', align_corners=False)
+            depth_guide = self.depth_down(depth_guide) # [48, 59, 16, 44]
+            img_enhence = img + self.acf(img, depth_guide) # [48, 512, 16, 44]
+            
+            # original code
+            #x = x.view(B * N, C, H, W).cuda()
+            x = self.depthnet(img_enhence) # [48(B*N), 123, 16, 44]
+            depth = self.get_depth_dist(depth_guide) # [48, 59, 16, 44]
+            geom = self.get_geometry(rots, trans, intrins, post_rots, post_trans) # [8, 6, 59, 16, 44, 3]
+            img_feat = img_enhence[:, self.D:(self.D + self.numC_Trans)] # [48, 64, 16, 44]
 
+            #pdb.set_trace()
             # Lift
-            volume = depth.unsqueeze(1) * img_feat.unsqueeze(2)
+            volume = depth.unsqueeze(1) * img_feat.unsqueeze(2) # [48, 64, 59, 16, 44]
             volume = volume.view(B, N, self.numC_Trans, self.D, H, W)
             volume = volume.permute(0, 1, 3, 4, 5, 2)
 
@@ -1210,7 +1261,7 @@ class ViewTransformerLiftSplatShootTemporal_DFE(BaseModule):
 
             prev_bevs[:][i] = bev_feat
 
-        # Feed current and prev bev features into GRU
+        # Feed current and prev bev features into vanilla GRU
         prev_bevs = prev_bevs.permute(1, 2, 0, 3, 4)
         prev_bevs = prev_bevs.reshape(B, 64, -1)
         res, _ = self.gru(prev_bevs.cuda())
@@ -1230,19 +1281,17 @@ class ViewTransformerLiftSplatShootTemporal_DFE(BaseModule):
             cur_bev = torch.unsqueeze(cur_bev, 1)
             res = res.permute(1,0,2,3,4)
 
-
         # max pooling version
-        tmp_concat = torch.cat([cur_bev.cuda(), res], axis=1) # 
+        tmp_concat = torch.cat([cur_bev.cuda(), res], axis=1)
         bev_feat = torch.max(tmp_concat, dim=1)
         bev_feat = bev_feat[0].cuda()
-        
 
         return bev_feat
 
 
 class dfe_module(nn.Module):
 
-    def __init__(self, in_channels, out_channels): # 256, 256
+    def __init__(self, in_channels, out_channels):
         super(dfe_module, self).__init__()
         self.softmax = nn.Softmax(dim=-1)
         self.conv1 = nn.Sequential(nn.Conv2d(in_channels, out_channels, 1, bias=False),

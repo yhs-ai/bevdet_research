@@ -237,7 +237,10 @@ class NuScenesTemporalDataset(Custom3DDatasetTemporal):
                 - ann_info (dict): Annotation info.
         """
         #pdb.set_trace()
-        info = self.data_infos[index] # len = 28130
+        # candidate: 634, 635
+        # 157, 158 -> 159
+        #index=159
+        info = self.data_infos[index] # index=0 for test
 
         #chgd
         cams= ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
@@ -266,8 +269,6 @@ class NuScenesTemporalDataset(Custom3DDatasetTemporal):
                 prev_intrins.append(torch.Tensor(info2['cams'][cam]['cam_intrinsic']))
 
             subtract+=1
-        
-        #pdb.set_trace()
         
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(

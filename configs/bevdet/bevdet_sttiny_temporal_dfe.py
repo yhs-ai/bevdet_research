@@ -226,7 +226,7 @@ input_modality = dict(
     use_external=False)
 
 data = dict(
-    samples_per_gpu=6,
+    samples_per_gpu=8,
     workers_per_gpu=0,
     train=dict(
         type='CBGSDataset',
@@ -263,4 +263,4 @@ evaluation = dict(interval=12, pipeline=eval_pipeline)
 checkpoint_config = dict(interval=1)
 optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
 work_dir = 'work_dirs/bevdet_gru_with_cp_dfe/'
-resume_from = 'work_dirs/bevdet_gru_with_cp_dfe/latest.pth'
+#resume_from = 'work_dirs/bevdet_gru_with_cp_dfe/latest.pth'

@@ -257,10 +257,10 @@ lr_config = dict(
     step_ratio_up=0.4,
 )
 
-total_epochs = 12
+total_epochs = 24
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
-evaluation = dict(interval=12, pipeline=eval_pipeline)
+evaluation = dict(interval=24, pipeline=eval_pipeline)
 checkpoint_config = dict(interval=1)
 optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
-work_dir = 'work_dirs/bevdet_conv_gru_with_cp_v2/'
-#resume_from = 'work_dirs/bevdet_gru_with_cp_softmax/latest.pth'
+work_dir = 'work_dirs/bevdet_conv_gru_with_cp_v2_modified/'
+resume_from = 'work_dirs/bevdet_conv_gru_with_cp_v2_modified/latest.pth'

@@ -2,6 +2,10 @@ import os
 import torch
 import pdb
 import torchvision
+import torch.nn.functional as F
+import cv2
+import numpy as np
+from matplotlib import pyplot as plt
 from torch import nn
 from torch.autograd import Variable
 
@@ -35,19 +39,23 @@ class ConvGRUCell(nn.Module):
                                     out_channels=2*self.hidden_dim,  # for update_gate,reset_gate respectively
                                     kernel_size=kernel_size,
                                     padding=self.padding,
-                                    bias=self.bias)
+                                    bias=self.bias).cuda()
 
         self.conv_can = nn.Conv2d(in_channels=input_dim+hidden_dim,
                               out_channels=self.hidden_dim, # for candidate neural memory
                               kernel_size=kernel_size,
                               padding=self.padding,
-                              bias=self.bias)
+                              bias=self.bias).cuda()
         # Deformable-conv
         kh, kw = 3, 3
-        self.offset = torch.rand(self.input_shape[0], 2 * kh * kw, self.height, self.width).cuda()
-        self.weight_1 = nn.init.xavier_normal_(torch.empty(64, 128, kh, kw)).cuda()
-        self.weight_2 = nn.init.xavier_normal_(torch.empty(64, 128, kh, kw)).cuda()
+        self.offset = torch.rand(self.input_shape[0], 2 * kh * kw, self.height, self.width).cuda() # [1, 18, 128, 128]
+        #self.weight_1 = nn.init.xavier_normal_(torch.empty(64, 128, kh, kw)).cuda()
+        #self.weight_2 = nn.init.xavier_normal_(torch.empty(64, 128, kh, kw)).cuda()
         self.mask = torch.rand(self.input_shape[0], kh * kw, self.height, self.width).cuda()
+
+        self.deform_conv_gates = torchvision.ops.DeformConv2d(in_channels= 64, out_channels= 64, kernel_size= 3, padding=1).cuda()
+        self.deform_conv_can = torchvision.ops.DeformConv2d(in_channels= 64, out_channels= 64, kernel_size= 3, padding=1).cuda()
+
 
     # Ratio Temporary Idea
     def solveProportion(a, b1, b2, c):
@@ -73,16 +81,147 @@ class ConvGRUCell(nn.Module):
         # Xavier Normal
         return nn.init.xavier_normal_((Variable(torch.zeros(batch_size, self.hidden_dim, self.height, self.width)).type(self.dtype)))
 
+    def normalize(self, image_features):
+        image_features = image_features.squeeze(0).cpu().detach().numpy()
+        min = image_features.min()
+        max = image_features.max()
+        image_features = (image_features-min)/(max-min)
+        image_features = (image_features *255)
+        return image_features
+
     def forward(self, input_tensor, h_cur):
         """
         :param self:
-        :param input_tensor: (b, c, h, w)
+        :param input_tensor: (b, c, h, w) # test: (1, 64, 128, 128)
             input is actually the target_model
         :param h_cur: (b, c_hidden, h, w)
             current hidden and cell states respectively
         :return: h_next,
             next hidden state
         """
+        '''
+        # BEV visualization
+        image_feature = self.normalize(input_tensor)
+        sum_image_feature = (np.sum(np.transpose(image_feature, (1,2,0)),axis=2)/64).astype("uint8")
+        max_image_feature = np.max(np.transpose(image_feature.astype("uint8"), (1,2,0)), axis=2)
+        sum_image_feature = cv2.applyColorMap(sum_image_feature, cv2.COLORMAP_JET)
+        max_image_feature = cv2.applyColorMap(max_image_feature, cv2.COLORMAP_JET)
+        cv2.imwrite("sum_image_feature_1.jpg", sum_image_feature)
+        cv2.imwrite("max_image_feature_1.jpg", max_image_feature)
+        pdb.set_trace()
+        '''
+        '''
+        # BEV visualization ver2
+        for i in range(input_tensor[0].shape[0]):
+            bev = input_tensor[0][i].cpu().detach().numpy()
+            cv2.imwrite('./vis_images2/test_'+str(i)+'.jpg', bev*255/bev.max())
+        pdb.set_trace()
+        '''
+        
+        '''
+        ############ For offset visualization
+        #self.offset = torch.rand(self.input_shape[0], 2 * kh * kw, self.height, self.width).cuda() # [1, 18, 128, 128]
+        #img_path = "./test_10_1.jpg" # t-1
+        img_path = "./test_10_2.jpg" # t-2
+        #img_path = "./data/visualize/n015-2018-07-11-11-54-16+0800__CAM_FRONT__1531281633662460.jpg"
+        im = cv2.imread(img_path) # [900, 1600, 3]
+        im = cv2.resize(im, (512, 512))
+
+        '''
+        #while 1:
+        #    implot = cv2.imshow("output", im)
+        #    key = cv2.waitKey(30)
+        #    if key == 27:
+        #        break
+        #pdb.set_trace()
+        '''
+
+        # ROT ver 1
+        #roi_x, roi_y = 253, 392
+        #roi_x, roi_y = 250, 420
+        #roi_x, roi_y = 240, 373 # static 2
+
+        # ROI ver 2
+        #roi_xs, roi_ys = [255, 253, 251, 251], [378, 387, 394, 404] # moving 1
+        #roi_xs, roi_ys = [251, 251, 251, 250], [411, 420, 426, 435] # moving 2
+        roi_xs, roi_ys = [241, 239, 240, 239], [356, 369, 376, 382] # static
+
+        # original ver
+        t_offset = self.offset # [1, 18, 128, 128]
+
+        # second ver
+        #t_offset = self.offset.cpu().detach().numpy()
+        #t_offset = t_offset.reshape(1, 128,128,-1)
+        #pdb.set_trace()
+        #t_offset = cv2.resize(t_offset, dsize=None, fx=12, fy=7)
+        #t_offset = t_offset.reshape(1, 18, 225, 400)
+        for roi_x, roi_y in zip(roi_xs, roi_ys):
+            for i in range(5):
+                if i==0:
+                    pass
+                elif i==1:
+                    roi_x += 1
+                elif i==2:
+                    roi_x -= 2
+                elif i==3:
+                    roi_y += 1
+                else:
+                    roi_y -= 2
+
+                cv2.circle(im, center=(roi_x, roi_y), color=(0, 255, 0), radius=1, thickness=-1)
+                #t_offset = F.interpolate(t_offset, size=(im.shape[0], im.shape[1]), mode='bilinear')
+                #t_offset = t_offset.permute(0,2,3,1) # [1, 900, 1600, 18]
+
+                #pdb.set_trace()
+                offsets_y = t_offset[:, ::2]*10 # [1, 9, 128, 128]
+                offsets_x = t_offset[:, 1::2]*10 # chgd
+                #offsets_y = t_offset[:, :9] # [1, 9, 128, 128]
+                #offsets_x = t_offset[:, 9:]
+
+                grid_y = np.arange(0, 128) # array([0, 1, 2, 3, 4, 5, 6])
+                grid_x = np.arange(0, 128) # array([0, 1, 2, 3, 4, 5, 6])
+
+                grid_x, grid_y = np.meshgrid(grid_x, grid_y) # (128 x 128) grid each
+
+                sampling_y = grid_y + offsets_y.detach().cpu().numpy() # (1, 9, 7, 7)
+                sampling_x = grid_x + offsets_x.detach().cpu().numpy()
+
+                resize_factor=4
+                sampling_y *= resize_factor
+                sampling_x *= resize_factor
+
+                # remove batch axis
+                sampling_y = sampling_y[0]
+                sampling_x = sampling_x[0]
+
+                sampling_y = sampling_y.transpose(1, 2, 0) # c, h, w -> h, w, c # (7, 7, 9)
+                sampling_x = sampling_x.transpose(1, 2, 0) # c, h, w -> h, w, c
+
+                sampling_y = np.clip(sampling_y, 0, 512) # (7, 7, 9)
+                sampling_x = np.clip(sampling_x, 0, 512)
+
+                sampling_y = cv2.resize(sampling_y, dsize=None, fx=resize_factor, fy=resize_factor) # (512, 512, 9)
+                sampling_x = cv2.resize(sampling_x, dsize=None, fx=resize_factor, fy=resize_factor)
+                #pdb.set_trace()
+
+                sampling_y = sampling_y[roi_y, roi_x] # (9,)
+                sampling_x = sampling_x[roi_y, roi_x]
+
+                for y, x in zip(sampling_y, sampling_x):
+                    y = round(y) # (9,)
+                    x = round(x)
+                    cv2.circle(im, center=(x, y), color=(0, 0, 255), radius=1, thickness=1)
+        
+        while 1:
+            implot = cv2.imshow("output", im)
+            key = cv2.waitKey(30)
+            if key == 27:
+                break
+        pdb.set_trace()
+
+        ######################################
+        '''
+
         combined_ = torch.cat([input_tensor, h_cur], dim=1) # [6, 96(64+32), 128, 128]
         combined_conv = self.conv_gates(combined_) # [6, 64(2*hidden_dim), 128, 128]
         #alpha = self.deform_conv_gates(combined)
@@ -97,20 +236,25 @@ class ConvGRUCell(nn.Module):
 
         #pdb.set_trace()
         # Motion Gate
+        '''
         combined_conv2 = torchvision.ops.deform_conv2d(input = combined_, #[6, 96, 128, 128]
                                                 offset = self.offset,
                                                 padding = self.padding,
                                                 weight = self.weight_1,
                                                 mask = self.mask) # -> [6, 64, 128, 128]
+        '''
+        combined_conv2 = self.deform_conv_gates(combined_, offset = self.offset, mask = self.mask)
 
         motion_gate = torch.sigmoid(combined_conv2) # [6, 64, 128, 128]
         combined_2 = torch.cat([input_tensor, motion_gate*h_cur], dim=1) # [6, 128, 128, 128]
-
+        '''
         cc_tnm = torchvision.ops.deform_conv2d(input = combined_2,
                                                 offset = self.offset,
                                                 padding = self.padding,
                                                 weight = self.weight_2,
                                                 mask = self.mask)
+        '''
+        cc_tnm = self.deform_conv_can(combined_2, offset = self.offset, mask = self.mask)
         tnm = torch.tanh(cc_tnm)
 
         h_next = (1 - update_gate) * h_cur + update_gate * cnm + update_gate * tnm
@@ -205,8 +349,8 @@ class ConvGRUV2(nn.Module):
             h = hidden_state[layer_idx] # [6, 32, 128, 128]
             output_inner = []
             for t in range(seq_len):
-                # input current hidden and cell state then compute the next hidden and cell state through ConvLSTMCell forward function
-                h = self.cell_list[layer_idx](input_tensor=cur_layer_input[:, t, :, :, :], h_cur=h) # (b,t,c,h,w)
+                # input current hidden and cell state then compute the next hidden and cell state through ConvGRUCell forward function
+                h = self.cell_list[layer_idx](input_tensor=cur_layer_input[:, t, :, :, :].cuda(), h_cur=h.cuda()) # (b,t,c,h,w)
                 output_inner.append(h)
 
             layer_output = torch.stack(output_inner, dim=1)
@@ -263,7 +407,7 @@ if __name__ == '__main__':
     hidden_dim = [64, 64]
     kernel_size = (3,3) # kernel size for two stacked hidden layer
     num_layers = 2 # number of stacked hidden layer
-    model = ConvGRU(input_size=(height, width),
+    model = ConvGRUV2(input_size=(height, width),
                     input_shape = input_tensor.shape,
                     input_dim=channels,
                     hidden_dim=hidden_dim,
